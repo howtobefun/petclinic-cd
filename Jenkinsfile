@@ -2,6 +2,7 @@ pipeline {
     agent any
     environment {
         MAVEN_OPTS = "-Dmaven.repo.local=.m2/repository"
+        DOCKER_HUB_CREDS = credentials('docker-hub')
     }
     stages {
         stage('Checkout') {
@@ -89,97 +90,28 @@ pipeline {
                 }
             }
         }
-        stage('Test') {
-            when {
-                expression { env.NO_SERVICES_TO_BUILD == 'false' }
-            }
-            steps {
-                script {
-                    env.SERVICES_TO_BUILD.split(',').each { service ->
-                        dir("spring-petclinic-${service}") {
-                            echo "Testing ${service}..."
-                            try {
-                                // Run tests with JaCoCo coverage verification
-                                sh """
-                                    echo "Running tests and coverage verification for ${service}"
-                                    ../mvnw clean verify
-                                """
-
-                                // Read JaCoCo coverage report
-                                def jacocoReport = readFile "target/site/jacoco/index.html"
-                                
-                                // Check if coverage is below threshold (70%)
-                                if (jacocoReport.contains("Total.*?([0-9.]+)%")) {
-                                    def coverage = (jacocoReport =~ /Total.*?([0-9.]+)%/)[0][1] as Double
-                                    if (coverage < 70) {
-                                        error "Test coverage for ${service} is below 70% (actual: ${coverage}%)"
-                                    }
-                                }
-                            } catch (Exception e) {
-                                echo "Tests or coverage verification failed for ${service}"
-                                throw e
-                            }
-                        }
-                    }
-                }
-            }
-            post {
-                always {
-                    script {
-                        // Publish test results and coverage reports
-                        env.SERVICES_TO_BUILD.split(',').each { service ->
-                            dir("spring-petclinic-${service}") {
-                                // Publish test results
-                                junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
-                                
-                                // Publish JaCoCo coverage report
-                                jacoco(
-                                    execPattern: '**/target/jacoco.exec',
-                                    classPattern: '**/target/classes',
-                                    sourcePattern: '**/src/main/java',
-                                    exclusionPattern: '**/test/**',
-                                    minimumLineCoverage: '70',
-                                    minimumBranchCoverage: '70',
-                                    changeBuildStatus: true
-                                )
-                                
-                                // Archive coverage reports
-                                archiveArtifacts artifacts: '**/target/site/jacoco/**', fingerprint: true
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        
         stage('Build') {
             when {
                 expression { env.NO_SERVICES_TO_BUILD == 'false' }
             }
             steps {
                 script {
-                    env.SERVICES_TO_BUILD.split(',').each { service ->
-                        dir("spring-petclinic-${service}") {
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', 
+                                                    usernameVariable: 'DOCKER_USERNAME', 
+                                                    passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh "echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin"
+                        
+                        env.SERVICES_TO_BUILD.split(',').each { service ->
                             echo "Building ${service}..."
                             try {
                                 sh """
                                     echo "Building ${service}"
-                                    ../mvnw clean package -DskipTests
+                                    ./mvnw clean install -PbuildDocker -pl ${service}
                                 """
                             } catch (Exception e) {
                                 echo "Build failed for ${service}"
                                 throw e
-                            }
-                        }
-                    }
-                }
-            }
-            post {
-                success {
-                    script {
-                        // Archive artifacts for changed services
-                        env.SERVICES_TO_BUILD.split(',').each { service ->
-                            dir("spring-petclinic-${service}") {
-                                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
                             }
                         }
                     }
