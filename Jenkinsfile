@@ -121,7 +121,9 @@ pipeline {
     }
     post {
         always {
-            cleanWs()
+            node('any') {
+                cleanWs()
+            }
         }
     }
 }
