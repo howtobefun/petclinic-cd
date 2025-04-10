@@ -106,7 +106,7 @@ pipeline {
                             try {
                                 sh """
                                     echo "Building ${service}"
-                                    ./mvnw clean install -PbuildDocker -pl ${service}
+                                    ./mvnw clean install -PbuildDocker -pl spring-petclinic-${service}
                                 """
                             } catch (Exception e) {
                                 echo "Build failed for ${service}"
