@@ -59,7 +59,7 @@ pipeline {
                     }
 
                     // If shared resources changed, build all services
-                    if (rootPomChanged || sharedResourcesChanged) {
+                    if (rootPomChanged || sharedResourcesChanged || env.BRANCH_NAME == 'main') {
                         echo "Shared resources changed. Building all services."
                         services.each { serviceKey, servicePath ->
                             servicesToBuild[serviceKey] = true
@@ -121,7 +121,9 @@ pipeline {
     }
     post {
         always {
-            cleanWs()
+            node {
+                cleanWs()
+            }
         }
     }
 }
