@@ -108,6 +108,18 @@ pipeline {
                                     echo "Building ${service}"
                                     ./mvnw clean install -PbuildDocker -pl spring-petclinic-${service}
                                 """
+
+                            // Get image info (assuming the image is named the same as the service directory)
+                            // def imageName = service.replace("spring-petclinic-", "")
+                            def baseImageName = "\$DOCKER_USERNAME/spring-petclinic-${service}"
+                            
+                            // Tag the image with commit ID
+                            sh "docker tag ${baseImageName}:latest ${baseImageName}:${env.COMMIT_ID}"
+                            
+                            // Push both tags to Docker Hub
+                            echo "Pushing ${baseImageName}:latest and ${baseImageName}:${env.COMMIT_ID} to Docker Hub"
+                            sh "docker push ${baseImageName}:latest"
+                            sh "docker push ${baseImageName}:${env.COMMIT_ID}"
                             } catch (Exception e) {
                                 echo "Build failed for ${service}"
                                 throw e
