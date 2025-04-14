@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customers-service
+  labels:
+    app: customers-service
+spec:
+  replicas: 1 # You can adjust the number of replicas
+  selector:
+    matchLabels:
+      app: customers-service
+  template:
+    metadata:
+      labels:
+        app: customers-service
+    spec:
+      containers:
+        - name: customers-service
+          image: howtobefun/spring-petclinic-customers-service:latest # CI will replace the tag
+          ports:
+            - containerPort: 8080 # The port your service listens on
+          #  resources: # You can define resource requests/limits
+          #    requests:
+          #      cpu: 100m
+          #      memory: 128Mi
+          #    limits:
+          #      cpu: 250m
+          #      memory: 256Mi
