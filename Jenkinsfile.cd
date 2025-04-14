@@ -19,28 +19,27 @@ pipeline {
         }
         stage('Deploy to Minikube') {
             steps {
-                script {
-                    sh 'pwd'  // Print the current working directory
-                    sh 'ls -al' // List all files and directories in the workspace
-                    sh 'ls -al k8s' // List all files and directories in the k8s directory
-                    def servicesBranches = [
-                        'customers-service': params.customers_service_branch,
-                        'vets-service': params.vets_service_branch,
-                        'visits-service': params.visits_service_branch,
-                        'genai-service': params.genai_service_branch
-                    ]
+                withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                        export KUBECONFIG=$KUBECONFIG_FILE
 
-                    servicesBranches.each { service, branch ->
-                        echo "Deploying ${service} with branch ${branch}"
-                        def imageName = "howtobefun/spring-petclinic-${service}" // Assuming your image naming convention
-                        
-                        //  Apply Kubernetes manifests and set the image
-                        sh """
-                            kubectl apply -f k8s/${service}-deployment.yaml -n default
-                            kubectl set image deployment/${service} ${service}=${imageName}:${branch} -n default
-                            kubectl apply -f k8s/${service}-service.yaml -n default
-                        """
-                    }
+                        def servicesBranches = [
+                            'customers-service': params.customers_service_branch,
+                            'vets-service': params.vets_service_branch,
+                            'visits-service': params.visits_service_branch,
+                            'genai-service': params.genai_service_branch
+                        ]
+
+                        servicesBranches.each { service, branch ->
+                            echo "Deploying ${service} with branch ${branch}"
+                            def imageName = "howtobefun/spring-petclinic-${service}" // Assuming your image naming convention
+
+                            //  Apply Kubernetes manifests and set the image
+                            kubectl apply -f k8s/\${service}-deployment.yaml -n default
+                            kubectl set image deployment/\${service} \${service}=\${imageName}:\${branch} -n default
+                            kubectl apply -f k8s/\${service}-service.yaml -n default
+                        }
+                    """
                 }
             }
         }
