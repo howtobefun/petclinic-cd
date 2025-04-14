@@ -20,6 +20,9 @@ pipeline {
         stage('Deploy to Minikube') {
             steps {
                 script {
+                    sh 'pwd'  // Print the current working directory
+                    sh 'ls -al' // List all files and directories in the workspace
+                    sh 'ls -al k8s' // List all files and directories in the k8s directory
                     def servicesBranches = [
                         'customers-service': params.customers_service_branch,
                         'vets-service': params.vets_service_branch,
@@ -29,7 +32,7 @@ pipeline {
 
                     servicesBranches.each { service, branch ->
                         echo "Deploying ${service} with branch ${branch}"
-                        def imageName = "your-dockerhub-username/spring-petclinic-${service}" // Assuming your image naming convention
+                        def imageName = "howtobefun/spring-petclinic-${service}" // Assuming your image naming convention
                         
                         //  Apply Kubernetes manifests and set the image
                         sh """
@@ -43,10 +46,21 @@ pipeline {
         }
         stage('Post-Deployment Instructions') {
             steps {
-                echo "To access the Petclinic application:"
-                echo "1. Add the following to your /etc/hosts file:"
-                echo "   ${MINIKUBE_IP} petclinic.local"  //  Replace petclinic.local with your desired domain
-                echo "2. Access the application in your browser using: http://petclinic.local:<NodePort>"  //  Replace <NodePort> with the actual NodePort
+                steps {
+                    echo "To access the Petclinic application:"
+                    echo "1. Add the following to your /etc/hosts file:"
+                    echo "   ${MINIKUBE_IP} petclinic.local"  //  e.g., 192.168.49.2 petclinic.local
+                    echo "2. Access the services in your browser using the following URLs:"
+                    echo "   - Customers Service: http://petclinic.local:30001"
+                    echo "   - Vets Service: http://petclinic.local:30002"
+                    echo "   - Visits Service: http://petclinic.local:30003"
+                    echo "   - Genai Service: http://petclinic.local:30004"
+                    echo "   - API Gateway: http://petclinic.local:30005"  //  If you have it
+                    echo "   - Discovery Server: http://petclinic.local:30006" //  If you have it
+                    echo "   - Config Server: http://petclinic.local:30007"    //  If you have it
+                    echo "   - Admin Server: http://petclinic.local:30008"     //  If you have it
+                    echo "   - Zipkin Server: http://petclinic.local:30009"    // If you have it
+                }            
             }
         }
     }
