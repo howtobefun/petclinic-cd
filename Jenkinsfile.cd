@@ -9,7 +9,7 @@ pipeline {
     }
     environment {
         MAVEN_OPTS = "-Dmaven.repo.local=.m2/repository"
-        MINIKUBE_IP = "192.168.49.2" //  Make sure this matches your Minikube IP. You can also retrieve dynamically in the script
+        MINIKUBE_IP = "192.168.49.2" // Ensure this matches your Minikube IP; consider retrieving dynamically if needed
     }
     stages {
         stage('Checkout') {
@@ -20,47 +20,51 @@ pipeline {
         stage('Deploy to Minikube') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-
+                    script {
+                        // Define services and their branches in Groovy
                         def servicesBranches = [
                             'customers-service': params.customers_service_branch,
                             'vets-service': params.vets_service_branch,
                             'visits-service': params.visits_service_branch,
-                            'genai-service': params.visits_service_branch,
                             'genai-service': params.genai_service_branch
                         ]
 
+                        // Generate shell script dynamically
+                        def deployScript = ""
                         servicesBranches.each { service, branch ->
-                            echo "Deploying \${service} with branch \${branch}"
-                            def imageName = "howtobefun/spring-petclinic-\${service}" // Assuming your image naming convention
-
-                            //  Apply Kubernetes manifests and set the image
-                            kubectl apply -f k8s/\${service}-deployment.yaml -n default
-                            kubectl set image deployment/\${service} \${service}=\${imageName}:\${branch} -n default
-                            kubectl apply -f k8s/\${service}-service.yaml -n default
+                            def imageName = "howtobefun/spring-petclinic-${service}:${branch}"
+                            deployScript += """
+                                echo "Deploying ${service} with branch ${branch}"
+                                kubectl apply -f k8s/${service}-deployment.yaml -n default
+                                kubectl set image deployment/${service} ${service}=${imageName} -n default
+                                kubectl apply -f k8s/${service}-service.yaml -n default
+                            """
                         }
-                    """                
+
+                        // Execute the shell script with KUBECONFIG set securely
+                        sh """
+                            export KUBECONFIG=\${KUBECONFIG_FILE}
+                            ${deployScript}
+                        """
+                    }
                 }
             }
         }
         stage('Post-Deployment Instructions') {
             steps {
-                steps {
-                    echo "To access the Petclinic application:"
-                    echo "1. Add the following to your /etc/hosts file:"
-                    echo "   ${MINIKUBE_IP} petclinic.local"  //  e.g., 192.168.49.2 petclinic.local
-                    echo "2. Access the services in your browser using the following URLs:"
-                    echo "   - Customers Service: http://petclinic.local:30001"
-                    echo "   - Vets Service: http://petclinic.local:30002"
-                    echo "   - Visits Service: http://petclinic.local:30003"
-                    echo "   - Genai Service: http://petclinic.local:30004"
-                    echo "   - API Gateway: http://petclinic.local:30005"  //  If you have it
-                    echo "   - Discovery Server: http://petclinic.local:30006" //  If you have it
-                    echo "   - Config Server: http://petclinic.local:30007"    //  If you have it
-                    echo "   - Admin Server: http://petclinic.local:30008"     //  If you have it
-                    echo "   - Zipkin Server: http://petclinic.local:30009"    // If you have it
-                }            
+                echo "To access the Petclinic application:"
+                echo "1. Add the following to your /etc/hosts file:"
+                echo "   ${env.MINIKUBE_IP} petclinic.local"
+                echo "2. Access the services in your browser using the following URLs:"
+                echo "   - Customers Service: http://petclinic.local:30001"
+                echo "   - Vets Service: http://petclinic.local:30002"
+                echo "   - Visits Service: http://petclinic.local:30003"
+                echo "   - Genai Service: http://petclinic.local:30004"
+                echo "   - API Gateway: http://petclinic.local:30005"
+                echo "   - Discovery Server: http://petclinic.local:30006"
+                echo "   - Config Server: http://petclinic.local:30007"
+                echo "   - Admin Server: http://petclinic.local:30008"
+                echo "   - Zipkin Server: http://petclinic.local:30009"
             }
         }
     }
