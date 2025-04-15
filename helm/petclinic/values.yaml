@@ -1,0 +1,37 @@
+# helm/petclinic/values.yaml
+global:
+  namespace: default
+
+services:
+  admin-server:
+    image: howtobefun/spring-petclinic-admin-server
+    tag: main
+    port: 8080
+  customers-service:
+    image: howtobefun/spring-petclinic-customers-service
+    tag: main
+    port: 8080
+  vets-service:
+    image: howtobefun/spring-petclinic-vets-service
+    tag: main
+    port: 8080
+  visits-service:
+    image: howtobefun/spring-petclinic-visits-service
+    tag: main
+    port: 8080
+  genai-service:
+    image: howtobefun/spring-petclinic-genai-service
+    tag: main
+    port: 8080
+  discovery-server:
+    image: howtobefun/spring-petclinic-discovery-server
+    tag: main
+    port: 8761  # Eureka default port
+  api-gateway:
+    image: howtobefun/spring-petclinic-api-gateway
+    tag: main
+    port: 8080
+  config-server:
+    image: howtobefun/spring-petclinic-config-server
+    tag: main
+    port: 8888  # Config server default port
