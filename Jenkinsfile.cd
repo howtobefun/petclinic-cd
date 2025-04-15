@@ -12,24 +12,23 @@ pipeline {
         string(name: 'discovery_server_branch', defaultValue: 'main', description: 'Branch for discovery-server')
     }
     environment {
-        MAVEN_OPTS = "-Dmaven.repo.local=.m2/repository"
-        MINIKUBE_IP = "192.168.49.2" // Ensure this matches your Minikube IP; consider retrieving dynamically if needed
+        MINIKUBE_IP = "192.168.49.2"
     }
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
+                echo "Checked out your repository configured in the Jenkins job."
             }
         }
         stage('Deploy to Minikube') {
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG_FILE')]) {
                     script {
-                        // Set the KUBECONFIG environment variable
                         env.KUBECONFIG = KUBECONFIG_FILE
 
-                        // Define all services and their branches
-                        def servicesBranches = [
+                        def deployScript = ""
+                        def services = [
                             'customers-service': params.customers_service_branch,
                             'vets-service': params.vets_service_branch,
                             'visits-service': params.visits_service_branch,
@@ -40,19 +39,37 @@ pipeline {
                             'discovery-server': params.discovery_server_branch
                         ]
 
-                        // Generate shell script dynamically
-                        def deployScript = ""
-                        servicesBranches.each { service, branch ->
+                        // Deploy config-server and discovery-server first due to dependencies
+                        ['config-server', 'discovery-server'].each { service ->
+                            def branch = services[service]
                             def imageName = "howtobefun/spring-petclinic-${service}:${branch}"
                             deployScript += """
-                                echo "Deploying ${service} with branch ${branch}"
+                                echo "Deploying ${service} with image tag ${branch}"
                                 kubectl apply -f k8s/${service}-deployment.yaml -n default
                                 kubectl set image deployment/${service} ${service}=${imageName} -n default
                                 kubectl apply -f k8s/${service}-service.yaml -n default
                             """
                         }
 
-                        // Execute the shell script with KUBECONFIG set securely
+                        // Wait for config-server and discovery-server to be ready
+                        deployScript += """
+                            echo "Waiting for config-server and discovery-server to be ready..."
+                            kubectl wait --for=condition=ready pod -l app=config-server -n default --timeout=120s || true
+                            kubectl wait --for=condition=ready pod -l app=discovery-server -n default --timeout=120s || true
+                        """
+
+                        // Deploy remaining services
+                        ['api-gateway', 'admin-server', 'customers-service', 'vets-service', 'visits-service', 'genai-service'].each { service ->
+                            def branch = services[service]
+                            def imageName = "howtobefun/spring-petclinic-${service}:${branch}"
+                            deployScript += """
+                                echo "Deploying ${service} with image tag ${branch}"
+                                kubectl apply -f k8s/${service}-deployment.yaml -n default
+                                kubectl set image deployment/${service} ${service}=${imageName} -n default
+                                kubectl apply -f k8s/${service}-service.yaml -n default
+                            """
+                        }
+
                         sh """
                             ${deployScript}
                         """
@@ -74,7 +91,6 @@ pipeline {
                 echo "   - Discovery Server: http://petclinic.local:30006"
                 echo "   - Config Server: http://petclinic.local:30007"
                 echo "   - Admin Server: http://petclinic.local:30008"
-                echo "   - Zipkin Server: http://petclinic.local:30009"
             }
         }
     }
