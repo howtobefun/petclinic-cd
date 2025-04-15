@@ -6,6 +6,10 @@ pipeline {
         string(name: 'vets_service_branch', defaultValue: 'main', description: 'Branch for vets-service')
         string(name: 'visits_service_branch', defaultValue: 'main', description: 'Branch for visits-service')
         string(name: 'genai_service_branch', defaultValue: 'main', description: 'Branch for genai-service')
+        string(name: 'admin_server_branch', defaultValue: 'main', description: 'Branch for admin-server')
+        string(name: 'api_gateway_branch', defaultValue: 'main', description: 'Branch for api-gateway')
+        string(name: 'config_server_branch', defaultValue: 'main', description: 'Branch for config-server')
+        string(name: 'discovery_server_branch', defaultValue: 'main', description: 'Branch for discovery-server')
     }
     environment {
         MAVEN_OPTS = "-Dmaven.repo.local=.m2/repository"
@@ -24,12 +28,16 @@ pipeline {
                         // Set the KUBECONFIG environment variable
                         env.KUBECONFIG = KUBECONFIG_FILE
 
-                        // Define services and their branches in Groovy
+                        // Define all services and their branches
                         def servicesBranches = [
                             'customers-service': params.customers_service_branch,
                             'vets-service': params.vets_service_branch,
                             'visits-service': params.visits_service_branch,
-                            'genai-service': params.genai_service_branch
+                            'genai-service': params.genai_service_branch,
+                            'admin-server': params.admin_server_branch,
+                            'api-gateway': params.api_gateway_branch,
+                            'config-server': params.config_server_branch,
+                            'discovery-server': params.discovery_server_branch
                         ]
 
                         // Generate shell script dynamically
