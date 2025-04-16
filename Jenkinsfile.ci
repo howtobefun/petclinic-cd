@@ -100,14 +100,11 @@ pipeline {
                                                     passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh "echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin"
                         
-                        env.SERVICES_TO_BUILD.split(',').each { service ->
-                            echo "Building ${service}..."
-                            try {
-                                sh """
-                                    echo "Building ${service}"
-                                    ./mvnw clean install -PbuildDocker -pl spring-petclinic-${service}
-                                """
+                        sh "./scripts/run_all.sh"
 
+                        env.SERVICES_TO_BUILD.split(',').each { service ->
+                            echo "Pushing ${service}..."
+                            try {
                                 def baseImageName = "\$DOCKER_USERNAME/spring-petclinic-${service}"
                             
                                 sh "docker tag ${baseImageName}:latest ${baseImageName}:${env.COMMIT_ID}"
