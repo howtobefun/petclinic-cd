@@ -19,6 +19,10 @@ pipeline {
             steps {
                 checkout scm
                 echo "Checked out your repository configured in the Jenkins job."
+                // Capture the commit SHA
+                script {
+                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                }
             }
         }
         stage('Deploy to Minikube') {
@@ -39,36 +43,37 @@ pipeline {
                             'discovery-server': params.discovery_server_branch
                         ]
 
+                        // Use 'latest' or GIT_COMMIT_SHORT for tags
+                        def tag = env.GIT_COMMIT_SHORT // Or set to 'latest' if preferred
+                        // def tag = 'latest'
+
                         // Deploy config-server first
-                        def configBranch = services['config-server']
-                        def configImage = "howtobefun/spring-petclinic-config-server:${configBranch}"
+                        def configImage = "howtobefun/spring-petclinic-config-server:${tag}"
                         deployScript += """
-                            echo "Deploying config-server with image tag ${configBranch}"
+                            echo "Deploying config-server with image tag ${tag}"
                             kubectl apply -f k8s/config-server-deployment.yaml -n default
                             kubectl set image deployment/config-server config-server=${configImage} -n default
                             kubectl apply -f k8s/config-server-service.yaml -n default
-                            echo "Waiting for config-server to be ready..."
-                            kubectl wait --for=condition=ready pod -l app=config-server -n default --timeout=120s
+                            echo "Waiting for config-server rollout to complete..."
+                            kubectl rollout status deployment/config-server -n default --timeout=120s
                         """
 
                         // Deploy discovery-server next
-                        def discoveryBranch = services['discovery-server']
-                        def discoveryImage = "howtobefun/spring-petclinic-discovery-server:${discoveryBranch}"
+                        def discoveryImage = "howtobefun/spring-petclinic-discovery-server:${tag}"
                         deployScript += """
-                            echo "Deploying discovery-server with image tag ${discoveryBranch}"
+                            echo "Deploying discovery-server with image tag ${tag}"
                             kubectl apply -f k8s/discovery-server-deployment.yaml -n default
                             kubectl set image deployment/discovery-server discovery-server=${discoveryImage} -n default
                             kubectl apply -f k8s/discovery-server-service.yaml -n default
-                            echo "Waiting for discovery-server to be ready..."
-                            kubectl wait --for=condition=ready pod -l app=discovery-server -n default --timeout=120s
+                            echo "Waiting for discovery-server rollout to complete..."
+                            kubectl rollout status deployment/discovery-server -n default --timeout=120s
                         """
 
                         // Deploy remaining services
                         ['api-gateway', 'admin-server', 'customers-service', 'vets-service', 'visits-service', 'genai-service'].each { service ->
-                            def branch = services[service]
-                            def imageName = "howtobefun/spring-petclinic-${service}:${branch}"
+                            def imageName = "howtobefun/spring-petclinic-${service}:${tag}"
                             deployScript += """
-                                echo "Deploying ${service} with image tag ${branch}"
+                                echo "Deploying ${service} with image tag ${tag}"
                                 kubectl apply -f k8s/${service}-deployment.yaml -n default
                                 kubectl set image deployment/${service} ${service}=${imageName} -n default
                                 kubectl apply -f k8s/${service}-service.yaml -n default
