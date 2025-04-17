@@ -12,7 +12,7 @@ pipeline {
         string(name: 'discovery_server_branch', defaultValue: 'main', description: 'Branch for discovery-server')
     }
     environment {
-        MINIKUBE_IP = "192.168.49.2"
+        MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
     }
     stages {
         stage('Checkout') {
