@@ -11,10 +11,24 @@ pipeline {
         string(name: 'config_server_branch', defaultValue: 'main', description: 'Branch for config-server')
         string(name: 'discovery_server_branch', defaultValue: 'main', description: 'Branch for discovery-server')
     }
-    environment {
-        MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
-    }
     stages {
+        stage('Setup Minikube') {
+            steps {
+                script {
+                    // Check if Minikube is running
+                    def minikubeStatus = sh(script: 'minikube status | grep "host: Running"', returnStatus: true)
+                    if (minikubeStatus != 0) {
+                        echo "Minikube is not running. Starting Minikube..."
+                        sh 'minikube start'
+                    } else {
+                        echo "Minikube is already running."
+                    }
+                    // Retrieve Minikube IP and store it in an environment variable
+                    env.MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
+                    echo "Minikube IP: ${env.MINIKUBE_IP}"
+                }
+            }
+        }
         stage('Checkout') {
             steps {
                 checkout scm
