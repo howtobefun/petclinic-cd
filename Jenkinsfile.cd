@@ -12,11 +12,19 @@ pipeline {
         string(name: 'discovery_server_branch', defaultValue: 'main', description: 'Branch for discovery-server')
     }
     stages {
+        stage('Start Minikube') {
+            steps {
+                sh 'minikube start --driver=docker --force'
+                sh 'kubectl config use-context minikube'
+                script {
+                    env.MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
+                }
+            }
+        }
         stage('Checkout') {
             steps {
                 checkout scm
                 echo "Checked out your repository configured in the Jenkins job."
-                // Capture the commit SHA
                 script {
                     env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                 }
@@ -24,64 +32,56 @@ pipeline {
         }
         stage('Deploy to Minikube') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG_FILE')]) {
-                    script {
-                        env.KUBECONFIG = KUBECONFIG_FILE
-                        env.MINIKUBE_IP = '192.168.49.2'
+                script {
+                    def tag = 'latest' // Use 'latest' tag for simplicity and consistency
+                    def deployScript = ""
+                    def services = [
+                        'customers-service': params.customers_service_branch,
+                        'vets-service': params.vets_service_branch,
+                        'visits-service': params.visits_service_branch,
+                        'genai-service': params.genai_service_branch,
+                        'admin-server': params.admin_server_branch,
+                        'api-gateway': params.api_gateway_branch,
+                        'config-server': params.config_server_branch,
+                        'discovery-server': params.discovery_server_branch
+                    ]
 
-                        def deployScript = ""
-                        def services = [
-                            'customers-service': params.customers_service_branch,
-                            'vets-service': params.vets_service_branch,
-                            'visits-service': params.visits_service_branch,
-                            'genai-service': params.genai_service_branch,
-                            'admin-server': params.admin_server_branch,
-                            'api-gateway': params.api_gateway_branch,
-                            'config-server': params.config_server_branch,
-                            'discovery-server': params.discovery_server_branch
-                        ]
+                    // Deploy config-server first
+                    def configImage = "howtobefun/spring-petclinic-config-server:${tag}"
+                    deployScript += """
+                        echo "Deploying config-server with image tag ${tag}"
+                        kubectl apply -f k8s/config-server-deployment.yaml -n default
+                        kubectl set image deployment/config-server config-server=${configImage} -n default
+                        kubectl apply -f k8s/config-server-service.yaml -n default
+                        echo "Waiting for config-server rollout to complete..."
+                        kubectl rollout status deployment/config-server -n default --timeout=120s
+                    """
 
-                        // Use 'latest' or GIT_COMMIT_SHORT for tags
-                        def tag = env.GIT_COMMIT_SHORT // Or set to 'latest' if preferred
-                        // def tag = 'latest'
+                    // Deploy discovery-server next
+                    def discoveryImage = "howtobefun/spring-petclinic-discovery-server:${tag}"
+                    deployScript += """
+                        echo "Deploying discovery-server with image tag ${tag}"
+                        kubectl apply -f k8s/discovery-server-deployment.yaml -n default
+                        kubectl set image deployment/discovery-server discovery-server=${discoveryImage} -n default
+                        kubectl apply -f k8s/discovery-server-service.yaml -n default
+                        echo "Waiting for discovery-server rollout to complete..."
+                        kubectl rollout status deployment/discovery-server -n default --timeout=120s
+                    """
 
-                        // Deploy config-server first
-                        def configImage = "howtobefun/spring-petclinic-config-server:${tag}"
+                    // Deploy remaining services
+                    ['api-gateway', 'admin-server', 'customers-service', 'vets-service', 'visits-service', 'genai-service'].each { service ->
+                        def imageName = "howtobefun/spring-petclinic-${service}:${tag}"
                         deployScript += """
-                            echo "Deploying config-server with image tag ${tag}"
-                            kubectl apply -f k8s/config-server-deployment.yaml -n default
-                            kubectl set image deployment/config-server config-server=${configImage} -n default
-                            kubectl apply -f k8s/config-server-service.yaml -n default
-                            echo "Waiting for config-server rollout to complete..."
-                            kubectl rollout status deployment/config-server -n default --timeout=120s
-                        """
-
-                        // Deploy discovery-server next
-                        def discoveryImage = "howtobefun/spring-petclinic-discovery-server:${tag}"
-                        deployScript += """
-                            echo "Deploying discovery-server with image tag ${tag}"
-                            kubectl apply -f k8s/discovery-server-deployment.yaml -n default
-                            kubectl set image deployment/discovery-server discovery-server=${discoveryImage} -n default
-                            kubectl apply -f k8s/discovery-server-service.yaml -n default
-                            echo "Waiting for discovery-server rollout to complete..."
-                            kubectl rollout status deployment/discovery-server -n default --timeout=120s
-                        """
-
-                        // Deploy remaining services
-                        ['api-gateway', 'admin-server', 'customers-service', 'vets-service', 'visits-service', 'genai-service'].each { service ->
-                            def imageName = "howtobefun/spring-petclinic-${service}:${tag}"
-                            deployScript += """
-                                echo "Deploying ${service} with image tag ${tag}"
-                                kubectl apply -f k8s/${service}-deployment.yaml -n default
-                                kubectl set image deployment/${service} ${service}=${imageName} -n default
-                                kubectl apply -f k8s/${service}-service.yaml -n default
-                            """
-                        }
-
-                        sh """
-                            ${deployScript}
+                            echo "Deploying ${service} with image tag ${tag}"
+                            kubectl apply -f k8s/${service}-deployment.yaml -n default
+                            kubectl set image deployment/${service} ${service}=${imageName} -n default
+                            kubectl apply -f k8s/${service}-service.yaml -n default
                         """
                     }
+
+                    sh """
+                        ${deployScript}
+                    """
                 }
             }
         }
@@ -104,6 +104,7 @@ pipeline {
     }
     post {
         always {
+            sh 'minikube stop || true'
             cleanWs()
         }
     }
