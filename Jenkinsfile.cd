@@ -14,6 +14,7 @@ pipeline {
     stages {
         stage('Start Minikube') {
             steps {
+                sh 'minikube delete'
                 sh 'minikube start --driver=docker --force'
                 sh 'kubectl config use-context minikube'
                 script {
