@@ -11,10 +11,12 @@ pipeline {
         string(name: 'config_server_branch', defaultValue: 'main', description: 'Branch for config-server')
         string(name: 'discovery_server_branch', defaultValue: 'main', description: 'Branch for discovery-server')
     }
+    environment {
+        NAMESPACE = 'petclinic'
+    }
     stages {
         stage('Start Minikube') {
             steps {
-                sh 'minikube delete'
                 sh 'minikube start --driver=docker --force'
                 sh 'kubectl config use-context minikube'
                 script {
@@ -31,52 +33,57 @@ pipeline {
                 }
             }
         }
+        stage('Get Commit IDs') {
+            steps {
+                script {
+                    env.CUSTOMERS_SERVICE_TAG = getCommitId('customers-service', params.customers_service_branch)
+                    env.VETS_SERVICE_TAG = getCommitId('vets-service', params.vets_service_branch)
+                    env.VISITS_SERVICE_TAG = getCommitId('vets-service', params.visits_service_branch)
+                    env.GENAI_SERVICE_TAG = getCommitId('genai-service', params.genai_service_branch)
+                    env.ADMIN_SERVER_TAG = getCommitId('admin-server', params.admin_server_branch)
+                    env.API_GATEWAY_TAG = getCommitId('api-gateway', params.api_gateway_branch)
+                    env.CONFIG_SERVER_TAG = getCommitId('config-server', params.config_server_branch)
+                    env.DISCOVERY_SERVER_TAG = getCommitId('discovery-server', params.discovery_server_branch)
+                }
+            }
+        }
         stage('Deploy to Minikube') {
             steps {
                 script {
-                    def tag = 'latest' // Use 'latest' tag for simplicity and consistency
+                    sh "kubectl create namespace ${env.NAMESPACE} || true"
                     def deployScript = ""
-                    def services = [
-                        'customers-service': params.customers_service_branch,
-                        'vets-service': params.vets_service_branch,
-                        'visits-service': params.visits_service_branch,
-                        'genai-service': params.genai_service_branch,
-                        'admin-server': params.admin_server_branch,
-                        'api-gateway': params.api_gateway_branch,
-                        'config-server': params.config_server_branch,
-                        'discovery-server': params.discovery_server_branch
-                    ]
 
-                    // Deploy config-server first
-                    def configImage = "howtobefun/spring-petclinic-config-server:${tag}"
+                    // Deploy config-server
+                    def configImage = "howtobefun/spring-petclinic-config-server:${env.CONFIG_SERVER_TAG}"
                     deployScript += """
-                        echo "Deploying config-server with image tag ${tag}"
-                        kubectl apply -f k8s/config-server-deployment.yaml -n default
-                        kubectl set image deployment/config-server config-server=${configImage} -n default
-                        kubectl apply -f k8s/config-server-service.yaml -n default
+                        echo "Deploying config-server with image tag ${env.CONFIG_SERVER_TAG}"
+                        kubectl apply -f k8s/config-server-deployment.yaml -n ${env.NAMESPACE}
+                        kubectl set image deployment/config-server config-server=${configImage} -n ${env.NAMESPACE}
+                        kubectl apply -f k8s/config-server-service.yaml -n ${env.NAMESPACE}
                         echo "Waiting for config-server rollout to complete..."
-                        kubectl rollout status deployment/config-server -n default --timeout=120s
+                        kubectl rollout status deployment/config-server -n ${env.NAMESPACE} --timeout=120s
                     """
 
-                    // Deploy discovery-server next
-                    def discoveryImage = "howtobefun/spring-petclinic-discovery-server:${tag}"
+                    // Deploy discovery-server
+                    def discoveryImage = "howtobefun/spring-petclinic-discovery-server:${env.DISCOVERY_SERVER_TAG}"
                     deployScript += """
-                        echo "Deploying discovery-server with image tag ${tag}"
-                        kubectl apply -f k8s/discovery-server-deployment.yaml -n default
-                        kubectl set image deployment/discovery-server discovery-server=${discoveryImage} -n default
-                        kubectl apply -f k8s/discovery-server-service.yaml -n default
+                        echo "Deploying discovery-server with image tag ${env.DISCOVERY_SERVER_TAG}"
+                        kubectl apply -f k8s/discovery-server-deployment.yaml -n ${env.NAMESPACE}
+                        kubectl set image deployment/discovery-server discovery-server=${discoveryImage} -n ${env.NAMESPACE}
+                        kubectl apply -f k8s/discovery-server-service.yaml -n ${env.NAMESPACE}
                         echo "Waiting for discovery-server rollout to complete..."
-                        kubectl rollout status deployment/discovery-server -n default --timeout=120s
+                        kubectl rollout status deployment/discovery-server -n ${env.NAMESPACE} --timeout=120s
                     """
 
                     // Deploy remaining services
                     ['api-gateway', 'admin-server', 'customers-service', 'vets-service', 'visits-service', 'genai-service'].each { service ->
-                        def imageName = "howtobefun/spring-petclinic-${service}:${tag}"
+                        def tagEnvVar = "${service.replace('-', '_').toUpperCase()}_TAG"
+                        def imageName = "howtobefun/spring-petclinic-${service}:${env[tagEnvVar]}"
                         deployScript += """
-                            echo "Deploying ${service} with image tag ${tag}"
-                            kubectl apply -f k8s/${service}-deployment.yaml -n default
-                            kubectl set image deployment/${service} ${service}=${imageName} -n default
-                            kubectl apply -f k8s/${service}-service.yaml -n default
+                            echo "Deploying ${service} with image tag ${env[tagEnvVar]}"
+                            kubectl apply -f k8s/${service}-deployment.yaml -n ${env.NAMESPACE}
+                            kubectl set image deployment/${service} ${service}=${imageName} -n ${env.NAMESPACE}
+                            kubectl apply -f k8s/${service}-service.yaml -n ${env.NAMESPACE}
                         """
                     }
 
@@ -86,8 +93,21 @@ pipeline {
                 }
             }
         }
+        stage('Store Deployment Metadata') {
+            steps {
+                script {
+                    writeFile file: "${env.WORKSPACE}/deployment-${env.BUILD_NUMBER}.txt", text: """
+                        NAMESPACE=${env.NAMESPACE}
+                        MINIKUBE_IP=${env.MINIKUBE_IP}
+                        BUILD_NUMBER=${env.BUILD_NUMBER}
+                    """
+                    archiveArtifacts artifacts: "deployment-${env.BUILD_NUMBER}.txt", allowEmptyArchive: false
+                }
+            }
+        }
         stage('Post-Deployment Instructions') {
             steps {
+                echo "Deployment successful for build ${env.BUILD_NUMBER}"
                 echo "To access the Petclinic application:"
                 echo "1. Add the following to your /etc/hosts file:"
                 echo "   ${env.MINIKUBE_IP} petclinic.local"
@@ -100,13 +120,37 @@ pipeline {
                 echo "   - Discovery Server: http://petclinic.local:30006"
                 echo "   - Config Server: http://petclinic.local:30007"
                 echo "   - Admin Server: http://petclinic.local:30008"
+                echo "3. To delete this deployment, click this link:"
+                echo "${env.JENKINS_URL}job/delete-deployment/buildWithParameters?BUILD_NUMBER_TO_DELETE=${env.BUILD_NUMBER}"
             }
         }
     }
     post {
         always {
-            sh 'minikube stop || true'
             cleanWs()
+            // Minikube is not stopped, allowing services to remain accessible
+        }
+        failure {
+            echo "Deployment failed. To clean up, click: ${env.JENKINS_URL}job/delete-deployment/buildWithParameters?BUILD_NUMBER_TO_DELETE=${env.BUILD_NUMBER}"
         }
     }
+}
+
+def getCommitId(serviceName, branch) {
+    def repoUrl = scm.userRemoteConfigs[0].url
+    def cleanBranch = branch.trim()
+    def commitId = sh(
+        script: "git ls-remote ${repoUrl} refs/heads/${cleanBranch} | cut -f 1 | head -n 1",
+        returnStdout: true
+    ).trim().take(7)
+
+    def tag = ""
+    if (cleanBranch == "main") {
+        tag = "main"
+    } else {
+        tag = "${cleanBranch}-${commitId}"
+    }
+
+    echo "Service: ${serviceName}, Branch: ${cleanBranch}, Commit ID: ${commitId}, Tag: ${tag}"
+    return tag
 }

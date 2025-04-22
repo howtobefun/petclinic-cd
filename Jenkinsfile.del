@@ -1,0 +1,100 @@
+// vim: syntax=groovy
+pipeline {
+    agent any
+    parameters {
+        string(name: 'BUILD_NUMBER_TO_DELETE', defaultValue: '', description: 'Build number of the deployment to delete (leave empty for auto-cleanup)')
+    }
+    stages {
+        stage('Determine Builds to Delete') {
+            when {
+                expression { params.BUILD_NUMBER_TO_DELETE == '' }
+            }
+            steps {
+                script {
+                    // Find deployments older than 1 hour
+                    def buildsToDelete = []
+                    def cutoffTime = new Date().time - (1 * 60 * 60 * 1000) // 1 hour ago
+                    def job = Jenkins.instance.getItemByFullName('your-cd-job-name') // Replace with your CD job name
+                    job.builds.each { build ->
+                        if (build.timeInMillis < cutoffTime && build.result != hudson.model.Result.FAILURE) {
+                            def metadataFile = "${build.getRootDir()}/archive/deployment-${build.number}.txt"
+                            if (new File(metadataFile).exists()) {
+                                buildsToDelete << build.number
+                            }
+                        }
+                    }
+                    env.BUILDS_TO_DELETE = buildsToDelete.join(',')
+                    if (buildsToDelete.isEmpty()) {
+                        echo "No deployments older than 1 hour found."
+                        currentBuild.result = 'SUCCESS'
+                        return
+                    }
+                    echo "Found deployments to delete: ${env.BUILDS_TO_DELETE}"
+                }
+            }
+        }
+        stage('Delete Specified Deployment') {
+            when {
+                expression { params.BUILD_NUMBER_TO_DELETE != '' }
+            }
+            steps {
+                script {
+                    copyArtifacts(
+                        projectName: 'your-cd-job-name', // Replace with your CD job name
+                        selector: specific("${params.BUILD_NUMBER_TO_DELETE}"),
+                        filter: "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt",
+                        target: ''
+                    )
+                    def metadata = readFile "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt"
+                    metadata.eachLine { line ->
+                        def (key, value) = line.split('=')
+                        env[key] = value
+                    }
+                    echo "Deleting deployment for namespace: ${env.NAMESPACE}, Build: ${env.BUILD_NUMBER}"
+                    sh "kubectl delete namespace ${env.NAMESPACE} || true"
+                }
+            }
+        }
+        stage('Delete Old Deployments') {
+            when {
+                expression { params.BUILD_NUMBER_TO_DELETE == '' && env.BUILDS_TO_DELETE }
+            }
+            steps {
+                script {
+                    def builds = env.BUILDS_TO_DELETE.split(',')
+                    for (buildNum in builds) {
+                        copyArtifacts(
+                            projectName: 'your-cd-job-name', // Replace with your CD job name
+                            selector: specific(buildNum),
+                            filter: "deployment-${buildNum}.txt",
+                            target: ''
+                        )
+                        def metadata = readFile "deployment-${buildNum}.txt"
+                        metadata.eachLine { line ->
+                            def (key, value) = line.split('=')
+                            env[key] = value
+                        }
+                        echo "Deleting old deployment for namespace: ${env.NAMESPACE}, Build: ${buildNum}"
+                        sh "kubectl delete namespace ${env.NAMESPACE} || true"
+                    }
+                }
+            }
+        }
+        stage('Stop Minikube') {
+            steps {
+                sh 'minikube stop'
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "Successfully deleted deployment(s)"
+        }
+        failure {
+            echo "Failed to delete deployment(s). Check logs for details."
+        }
+    }
+}
