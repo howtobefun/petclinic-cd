@@ -12,7 +12,7 @@ pipeline {
         string(name: 'discovery_server_branch', defaultValue: 'main', description: 'Branch for discovery-server')
     }
     environment {
-        NAMESPACE = 'petclinic'
+        NAMESPACE = "petclinic-${BUILD_NUMBER}"
     }
     stages {
         stage('Start Minikube') {
@@ -50,8 +50,7 @@ pipeline {
         stage('Create Namespace') {
             steps {
                 script {
-                    sh "kubectl get namespace | grep -q "^$env.NAMESPACE" || kubectl create namespace ${env.NAMESPACE}"
-                }
+                    sh "kubectl get namespace | grep -q \"^${env.NAMESPACE}\" || kubectl create namespace ${env.NAMESPACE}"                }
             }
         }
         stage('Delete all pods') {
