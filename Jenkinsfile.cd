@@ -50,7 +50,7 @@ pipeline {
         stage('Create Namespace') {
             steps {
                 script {
-                    sh "kubectl create namespace ${env.NAMESPACE}"
+                    sh "kubectl get namespace | grep -q "^$env.NAMESPACE" || kubectl create namespace ${env.NAMESPACE}"
                 }
             }
         }
