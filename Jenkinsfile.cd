@@ -121,6 +121,8 @@ pipeline {
         }
         stage('Post-Deployment Instructions') {
             steps {
+                sh "kubectl get pods -n ${env.NAMESPACE}"
+
                 echo "Deployment successful for build ${env.BUILD_NUMBER}"
                 echo "To access the Petclinic application:"
                 echo "1. Add the following to your /etc/hosts file:"
@@ -158,7 +160,12 @@ def getCommitId(serviceName, branch) {
         returnStdout: true
     ).trim().take(7)
 
-    def tag = commitId
+    def tag = ""
+    if (cleanBranch == "main") {
+        tag = "latest"
+    } else {
+        tag = "${cleanBranch}-${commitId}"
+    }
 
     echo "Service: ${serviceName}, Branch: ${cleanBranch}, Commit ID: ${commitId}, Tag: ${tag}"
     return tag
