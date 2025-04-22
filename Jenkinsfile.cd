@@ -17,7 +17,8 @@ pipeline {
     stages {
         stage('Start Minikube') {
             steps {
-                sh 'minikube start --driver=docker --force'
+                sh 'minikube delete'
+                sh 'minikube start --driver=docker'
                 sh 'kubectl config use-context minikube'
                 script {
                     env.MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
