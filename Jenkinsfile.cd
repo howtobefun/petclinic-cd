@@ -47,10 +47,24 @@ pipeline {
                 }
             }
         }
+        stage('Create Namespace') {
+            steps {
+                script {
+                    sh "kubectl create namespace ${env.NAMESPACE}"
+                }
+            }
+        }
+        stage('Delete all pods') {
+            steps {
+                script {
+                    sh "kubectl delete pods --all -n ${env.NAMESPACE}"
+                }
+            }
+        }
         stage('Deploy to Minikube') {
             steps {
                 script {
-                    sh "kubectl create namespace ${env.NAMESPACE} || true"
+                    
                     def deployScript = ""
 
                     // Deploy config-server
