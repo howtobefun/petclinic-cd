@@ -98,6 +98,7 @@ pipeline {
                             kubectl apply -f k8s/${service}-deployment.yaml -n ${env.NAMESPACE}
                             kubectl set image deployment/${service} ${service}=${imageName} -n ${env.NAMESPACE}
                             kubectl apply -f k8s/${service}-service.yaml -n ${env.NAMESPACE}
+                            kubectl rollout status deployment/${service} -n ${env.NAMESPACE} --timeout=120s
                         """
                     }
 
