@@ -14,12 +14,18 @@ pipeline {
                     // Find deployments older than 1 hour
                     def buildsToDelete = []
                     def cutoffTime = new Date().time - (1 * 60 * 60 * 1000) // 1 hour ago
-                    def job = Jenkins.instance.getItemByFullName('petclinic-cd') // Replace with your CD job name
-                    job.builds.each { build ->
-                        if (build.timeInMillis < cutoffTime && build.result != hudson.model.Result.FAILURE) {
-                            def metadataFile = "${build.getRootDir()}/archive/deployment-${build.number}.txt"
-                            if (new File(metadataFile).exists()) {
-                                buildsToDelete << build.number
+                    def project = Jenkins.instance.getItemByFullName('petclinic-cd') // Replace with your multibranch project name
+                    if (!project) {
+                        error "Project 'petclinic-cd' not found. Please verify the job name."
+                    }
+                    // Iterate over jobs (branches) in the multibranch project
+                    project.getAllJobs().each { job ->
+                        job.builds.each { build ->
+                            if (build.timeInMillis < cutoffTime && build.result != hudson.model.Result.FAILURE) {
+                                def metadataFile = "${build.getRootDir()}/archive/deployment-${build.number}.txt"
+                                if (new File(metadataFile).exists()) {
+                                    buildsToDelete << build.number
+                                }
                             }
                         }
                     }
@@ -39,19 +45,29 @@ pipeline {
             }
             steps {
                 script {
-                    copyArtifacts(
-                        projectName: 'petclinic-cd', // Replace with your CD job name
-                        selector: specific("${params.BUILD_NUMBER_TO_DELETE}"),
-                        filter: "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt",
-                        target: ''
-                    )
-                    def metadata = readFile "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt"
-                    metadata.eachLine { line ->
-                        def (key, value) = line.split('=')
-                        env[key] = value
+                    try {
+                        copyArtifacts(
+                            projectName: 'petclinic-cd', // Replace with your CD job name
+                            selector: specific("${params.BUILD_NUMBER_TO_DELETE}"),
+                            filter: "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt",
+                            target: ''
+                        )
+                        def metadata = readFile "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt"
+                        metadata.eachLine { line ->
+                            def parts = line.split('=', 2) // Handle cases where value contains '='
+                            if (parts.size() == 2) {
+                                env[parts[0]] = parts[1]
+                            }
+                        }
+                        if (!env.NAMESPACE) {
+                            error "Namespace not found in metadata for build ${params.BUILD_NUMBER_TO_DELETE}"
+                        }
+                        echo "Deleting deployment for namespace: ${env.NAMESPACE}, Build: ${params.BUILD_NUMBER_TO_DELETE}"
+                        sh "kubectl delete namespace ${env.NAMESPACE} || true"
+                    } catch (Exception e) {
+                        echo "Error deleting specified deployment: ${e.message}"
+                        throw e
                     }
-                    echo "Deleting deployment for namespace: ${env.NAMESPACE}, Build: ${env.BUILD_NUMBER}"
-                    sh "kubectl delete namespace ${env.NAMESPACE} || true"
                 }
             }
         }
@@ -63,26 +79,37 @@ pipeline {
                 script {
                     def builds = env.BUILDS_TO_DELETE.split(',')
                     for (buildNum in builds) {
-                        copyArtifacts(
-                            projectName: 'your-cd-job-name', // Replace with your CD job name
-                            selector: specific(buildNum),
-                            filter: "deployment-${buildNum}.txt",
-                            target: ''
-                        )
-                        def metadata = readFile "deployment-${buildNum}.txt"
-                        metadata.eachLine { line ->
-                            def (key, value) = line.split('=')
-                            env[key] = value
+                        try {
+                            copyArtifacts(
+                                projectName: 'petclinic-cd', // Consistent job name
+                                selector: specific(buildNum),
+                                filter: "deployment-${buildNum}.txt",
+                                target: ''
+                            )
+                            def metadata = readFile "deployment-${buildNum}.txt"
+                            metadata.eachLine { line ->
+                                def parts = line.split('=', 2)
+                                if (parts.size() == 2) {
+                                    env[parts[0]] = parts[1]
+                                }
+                            }
+                            if (!env.NAMESPACE) {
+                                echo "Warning: Namespace not found in metadata for build ${buildNum}. Skipping."
+                                continue
+                            }
+                            echo "Deleting old deployment for namespace: ${env.NAMESPACE}, Build: ${buildNum}"
+                            sh "kubectl delete namespace ${env.NAMESPACE} || true"
+                        } catch (Exception e) {
+                            echo "Error deleting deployment for build ${buildNum}: ${e.message}"
+                            // Continue to next build instead of failing
                         }
-                        echo "Deleting old deployment for namespace: ${env.NAMESPACE}, Build: ${buildNum}"
-                        sh "kubectl delete namespace ${env.NAMESPACE} || true"
                     }
                 }
             }
         }
         stage('Stop Minikube') {
             steps {
-                sh 'minikube stop'
+                sh 'minikube stop || true' // Prevent failure if Minikube is already stopped
             }
         }
     }
