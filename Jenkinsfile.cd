@@ -111,7 +111,7 @@ pipeline {
         stage('Store Deployment Metadata') {
             steps {
                 script {
-                    writeFile file: "${env.WORKSPACE}/deployment-${env.BUILD_NUMBER}.txt", text: """
+                    writeFile file: "petclinic-cd/deployment-${env.BUILD_NUMBER}.txt", text: """
                         NAMESPACE=${env.NAMESPACE}
                         MINIKUBE_IP=${env.MINIKUBE_IP}
                         BUILD_NUMBER=${env.BUILD_NUMBER}
