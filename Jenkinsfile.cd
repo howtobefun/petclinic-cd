@@ -116,7 +116,7 @@ pipeline {
                         MINIKUBE_IP=${env.MINIKUBE_IP}
                         BUILD_NUMBER=${env.BUILD_NUMBER}
                     """
-                    archiveArtifacts artifacts: "deployment-${env.BUILD_NUMBER}.txt", allowEmptyArchive: false
+                    archiveArtifacts artifacts: "petclinic-cd/deployment-${env.BUILD_NUMBER}.txt", allowEmptyArchive: false
                 }
             }
         }
