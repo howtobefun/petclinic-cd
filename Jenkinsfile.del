@@ -4,6 +4,9 @@ pipeline {
     parameters {
         string(name: 'BUILD_NUMBER_TO_DELETE', defaultValue: '', description: 'Build number of the deployment to delete (leave empty for auto-cleanup)')
     }
+    environment {
+        DEPLOYMENT_JOB_NAME = 'petclinic-cd' // Correct job name
+    }
     stages {
         stage('Determine Builds to Delete') {
             when {
@@ -14,18 +17,16 @@ pipeline {
                     // Find deployments older than 1 hour
                     def buildsToDelete = []
                     def cutoffTime = new Date().time - (1 * 60 * 60 * 1000) // 1 hour ago
-                    def project = Jenkins.instance.getItemByFullName('petclinic-cd') // Replace with your multibranch project name
+                    def project = Jenkins.instance.getItemByFullName(env.DEPLOYMENT_JOB_NAME)
                     if (!project) {
-                        error "Project 'petclinic-cd' not found. Please verify the job name."
+                        error "Project '${env.DEPLOYMENT_JOB_NAME}' not found. Please verify the job name in Jenkins."
                     }
-                    // Iterate over jobs (branches) in the multibranch project
-                    project.getAllJobs().each { job ->
-                        job.builds.each { build ->
-                            if (build.timeInMillis < cutoffTime && build.result != hudson.model.Result.FAILURE) {
-                                def metadataFile = "${build.getRootDir()}/archive/deployment-${build.number}.txt"
-                                if (new File(metadataFile).exists()) {
-                                    buildsToDelete << build.number
-                                }
+                    // Directly access builds of the pipeline job
+                    project.builds.each { build ->
+                        if (build.timeInMillis < cutoffTime && build.result != hudson.model.Result.FAILURE) {
+                            def metadataFile = "${build.getRootDir()}/archive/deployment-${build.number}.txt"
+                            if (new File(metadataFile).exists()) {
+                                buildsToDelete << build.number
                             }
                         }
                     }
@@ -46,9 +47,8 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Use CopyArtifact plugin with specific build selector
                         copyArtifacts(
-                            projectName: 'petclinic-cd', // Replace with your CD job name
+                            projectName: env.DEPLOYMENT_JOB_NAME,
                             selector: [$class: 'SpecificBuildSelector', buildNumber: "${params.BUILD_NUMBER_TO_DELETE}"],
                             filter: "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt",
                             target: '',
@@ -56,7 +56,7 @@ pipeline {
                         )
                         def metadataFile = "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt"
                         if (!fileExists(metadataFile)) {
-                            error "Metadata file ${metadataFile} not found for build ${params.BUILD_NUMBER_TO_DELETE}"
+                            error "Metadata file ${metadataFile} not found for build ${params.BUILD_NUMBER_TO_DELETE} in ${env.DEPLOYMENT_JOB_NAME}"
                         }
                         def metadata = readFile metadataFile
                         metadata.eachLine { line ->
@@ -71,7 +71,7 @@ pipeline {
                         echo "Deleting deployment for namespace: ${env.NAMESPACE}, Build: ${params.BUILD_NUMBER_TO_DELETE}"
                         sh "kubectl delete namespace ${env.NAMESPACE} || true"
                     } catch (Exception e) {
-                        echo "Error deleting specified deployment: ${e.message}"
+                        echo "Error deleting specified deployment for build ${params.BUILD_NUMBER_TO_DELETE}: ${e.message}"
                         throw e
                     }
                 }
@@ -87,7 +87,7 @@ pipeline {
                     for (buildNum in builds) {
                         try {
                             copyArtifacts(
-                                projectName: 'petclinic-cd', // Consistent job name
+                                projectName: env.DEPLOYMENT_JOB_NAME,
                                 selector: [$class: 'SpecificBuildSelector', buildNumber: buildNum],
                                 filter: "deployment-${buildNum}.txt",
                                 target: '',
@@ -95,7 +95,7 @@ pipeline {
                             )
                             def metadataFile = "deployment-${buildNum}.txt"
                             if (!fileExists(metadataFile)) {
-                                echo "Warning: Metadata file ${metadataFile} not found for build ${buildNum}. Skipping."
+                                echo "Warning: Metadata file ${metadataFile} not found for build ${buildNum} in ${env.DEPLOYMENT_JOB_NAME}. Skipping."
                                 continue
                             }
                             def metadata = readFile metadataFile

@@ -39,7 +39,7 @@ pipeline {
                 script {
                     env.CUSTOMERS_SERVICE_TAG = getCommitId('customers-service', params.customers_service_branch)
                     env.VETS_SERVICE_TAG = getCommitId('vets-service', params.vets_service_branch)
-                    env.VISITS_SERVICE_TAG = getCommitId('vets-service', params.visits_service_branch)
+                    env.VISITS_SERVICE_TAG = getCommitId('visits-service', params.visits_service_branch)
                     env.GENAI_SERVICE_TAG = getCommitId('genai-service', params.genai_service_branch)
                     env.ADMIN_SERVER_TAG = getCommitId('admin-server', params.admin_server_branch)
                     env.API_GATEWAY_TAG = getCommitId('api-gateway', params.api_gateway_branch)
@@ -111,12 +111,12 @@ pipeline {
         stage('Store Deployment Metadata') {
             steps {
                 script {
-                    writeFile file: "petclinic-cd/deployment-${env.BUILD_NUMBER}.txt", text: """
+                    writeFile file: "${env.WORKSPACE}/deployment-${env.BUILD_NUMBER}.txt", text: """
                         NAMESPACE=${env.NAMESPACE}
                         MINIKUBE_IP=${env.MINIKUBE_IP}
                         BUILD_NUMBER=${env.BUILD_NUMBER}
                     """
-                    archiveArtifacts artifacts: "petclinic-cd/deployment-${env.BUILD_NUMBER}.txt", allowEmptyArchive: false
+                    archiveArtifacts artifacts: "deployment-${env.BUILD_NUMBER}.txt", allowEmptyArchive: false
                 }
             }
         }
