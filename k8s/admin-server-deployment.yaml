@@ -18,5 +18,5 @@ spec:
         - name: admin-server
           image: howtobefun/spring-petclinic-admin-server:latest
           ports:
-            - containerPort: 8084 # Or the port your admin-server uses
+            - containerPort: 9090 # Or the port your admin-server uses
 

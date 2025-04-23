@@ -18,4 +18,4 @@ spec:
         - name: genai-service
           image: howtobefun/spring-petclinic-genai-service:latest
           ports:
-            - containerPort: 8083 #  Or the port your genai-service uses
+            - containerPort: 8084 #  Or the port your genai-service uses

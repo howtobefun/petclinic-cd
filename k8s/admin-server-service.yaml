@@ -9,7 +9,7 @@ spec:
     app: admin-server
   ports:
     - protocol: TCP
-      port: 8084       # Or the port your admin-server uses
-      targetPort: 8084  # Or the port your admin-server uses
+      port: 9090       # Or the port your admin-server uses
+      targetPort: 9090  # Or the port your admin-server uses
       nodePort: 30008
   type: NodePort

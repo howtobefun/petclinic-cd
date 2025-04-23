@@ -9,7 +9,7 @@ spec:
     app: api-gateway
   ports:
     - protocol: TCP
-      port: 8087       # Or the port your api-gateway uses
-      targetPort: 8087  # Or the port your api-gateway uses
+      port: 8080       # Or the port your api-gateway uses
+      targetPort: 8080  # Or the port your api-gateway uses
       nodePort: 30005
   type: NodePort

@@ -18,4 +18,4 @@ spec:
         - name: api-gateway
           image: howtobefun/spring-petclinic-api-gateway:latest
           ports:
-            - containerPort: 8087 # Or the port your api-gateway uses
+            - containerPort: 8080 # Or the port your api-gateway uses

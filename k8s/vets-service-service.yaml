@@ -9,7 +9,7 @@ spec:
     app: vets-service
   ports:
     - protocol: TCP
-      port: 8081       #  Or the port your vets-service uses
-      targetPort: 8081  #  Or the port your vets-service uses
+      port: 8083       #  Or the port your vets-service uses
+      targetPort: 8083  #  Or the port your vets-service uses
       nodePort: 30002
   type: NodePort

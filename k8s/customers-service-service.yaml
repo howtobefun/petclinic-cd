@@ -9,7 +9,7 @@ spec:
     app: customers-service
   ports:
     - protocol: TCP
-      port: 8080       # Port the service listens on
-      targetPort: 8080  # Port the service listens on inside the pod
+      port: 8081       # Port the service listens on
+      targetPort: 8081  # Port the service listens on inside the pod
       nodePort: 30001   # Port exposed on the Minikube node (30000-32767)
   type: NodePort

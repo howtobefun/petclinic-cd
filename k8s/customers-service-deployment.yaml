@@ -18,7 +18,7 @@ spec:
         - name: customers-service
           image: howtobefun/spring-petclinic-customers-service:latest # CI will replace the tag
           ports:
-            - containerPort: 8080 # The port your service listens on
+            - containerPort: 8081 # The port your service listens on
           #  resources: # You can define resource requests/limits
           #    requests:
           #      cpu: 100m

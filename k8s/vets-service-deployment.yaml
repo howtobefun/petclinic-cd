@@ -18,4 +18,4 @@ spec:
         - name: vets-service
           image: howtobefun/spring-petclinic-vets-service:latest
           ports:
-            - containerPort: 8081 #  Or the port your vets-service uses
+            - containerPort: 8083 #  Or the port your vets-service uses
