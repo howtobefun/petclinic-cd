@@ -47,12 +47,12 @@ pipeline {
             steps {
                 script {
                     try {
-                        def namespace = "petclinic-$params.BUILD_NUMBER_TO_DELETE"
+                        def namespace = "petclinic-$buildNum"
                         if (namespace) {
                             error "Namespace not found in metadata for build ${params.BUILD_NUMBER_TO_DELETE}"
                         }
-                        echo "Deleting deployment for namespace: ${namespace}, Build: ${params.BUILD_NUMBER_TO_DELETE}"
-                        sh "kubectl delete namespace ${namespace} || true"
+                        echo "Deleting deployment for namespace: ${env.NAMESPACE}, Build: ${params.BUILD_NUMBER_TO_DELETE}"
+                        sh "kubectl delete namespace ${env.NAMESPACE} || true"
                     } catch (Exception e) {
                         echo "Error deleting specified deployment for build ${params.BUILD_NUMBER_TO_DELETE}: ${e.message}"
                         throw e
@@ -70,6 +70,8 @@ pipeline {
                     for (buildNum in builds) {
                         try {
                             def namespace = "petclinic-$buildNum"
+                            
+                            sh "echo ${namespace}"
 
                             if (!namespace) {
                                 echo "Warning: Namespace not found in metadata for build ${buildNum}. Skipping."
