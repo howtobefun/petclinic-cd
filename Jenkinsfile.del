@@ -86,7 +86,7 @@ pipeline {
                     def builds = env.BUILDS_TO_DELETE.split(',')
                     for (buildNum in builds) {
                         try {
-                            env.NAMESPACE = "petclinic-$buildNum"
+                            def namespace = "petclinic-$buildNum"
                             copyArtifacts(
                                 projectName: env.DEPLOYMENT_JOB_NAME,
                                 selector: [$class: 'SpecificBuildSelector', buildNumber: buildNum],
@@ -106,12 +106,12 @@ pipeline {
                                     env[parts[0]] = parts[1]
                                 }
                             }
-                            if (!env.NAMESPACE) {
+                            if (!namespace) {
                                 echo "Warning: Namespace not found in metadata for build ${buildNum}. Skipping."
                                 continue
                             }
-                            echo "Deleting old deployment for namespace: ${env.NAMESPACE}, Build: ${buildNum}"
-                            sh "kubectl delete namespace ${env.NAMESPACE} || true"
+                            echo "Deleting old deployment for namespace: ${namespace}, Build: ${buildNum}"
+                            sh "kubectl delete namespace ${namespace} || true"
                         } catch (Exception e) {
                             echo "Error deleting deployment for build ${buildNum}: ${e.message}"
                             // Continue to next build instead of failing
