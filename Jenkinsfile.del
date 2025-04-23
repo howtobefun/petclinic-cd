@@ -86,6 +86,7 @@ pipeline {
                     def builds = env.BUILDS_TO_DELETE.split(',')
                     for (buildNum in builds) {
                         try {
+                            env.NAMESPACE = "petclinic-$buildNum"
                             copyArtifacts(
                                 projectName: env.DEPLOYMENT_JOB_NAME,
                                 selector: [$class: 'SpecificBuildSelector', buildNumber: buildNum],
