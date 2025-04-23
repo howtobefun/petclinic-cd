@@ -46,15 +46,21 @@ pipeline {
             steps {
                 script {
                     try {
+                        // Use CopyArtifact plugin with specific build selector
                         copyArtifacts(
                             projectName: 'petclinic-cd', // Replace with your CD job name
-                            selector: specific("${params.BUILD_NUMBER_TO_DELETE}"),
+                            selector: [$class: 'SpecificBuildSelector', buildNumber: "${params.BUILD_NUMBER_TO_DELETE}"],
                             filter: "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt",
-                            target: ''
+                            target: '',
+                            optional: true // Allow step to continue if artifacts are missing
                         )
-                        def metadata = readFile "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt"
+                        def metadataFile = "deployment-${params.BUILD_NUMBER_TO_DELETE}.txt"
+                        if (!fileExists(metadataFile)) {
+                            error "Metadata file ${metadataFile} not found for build ${params.BUILD_NUMBER_TO_DELETE}"
+                        }
+                        def metadata = readFile metadataFile
                         metadata.eachLine { line ->
-                            def parts = line.split('=', 2) // Handle cases where value contains '='
+                            def parts = line.split('=', 2) // Handle values containing '='
                             if (parts.size() == 2) {
                                 env[parts[0]] = parts[1]
                             }
@@ -82,11 +88,17 @@ pipeline {
                         try {
                             copyArtifacts(
                                 projectName: 'petclinic-cd', // Consistent job name
-                                selector: specific(buildNum),
+                                selector: [$class: 'SpecificBuildSelector', buildNumber: buildNum],
                                 filter: "deployment-${buildNum}.txt",
-                                target: ''
+                                target: '',
+                                optional: true // Allow step to continue if artifacts are missing
                             )
-                            def metadata = readFile "deployment-${buildNum}.txt"
+                            def metadataFile = "deployment-${buildNum}.txt"
+                            if (!fileExists(metadataFile)) {
+                                echo "Warning: Metadata file ${metadataFile} not found for build ${buildNum}. Skipping."
+                                continue
+                            }
+                            def metadata = readFile metadataFile
                             metadata.eachLine { line ->
                                 def parts = line.split('=', 2)
                                 if (parts.size() == 2) {
