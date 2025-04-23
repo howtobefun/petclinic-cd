@@ -48,6 +48,8 @@ pipeline {
                 script {
                     try {
                         def namespace = "petclinic-$params.BUILD_NUMBER_TO_DELETE"
+                        sh "kubectl get namespaces"
+                        sh "echo $namespace"
                         if (namespace) {
                             error "Namespace not found in metadata for build ${params.BUILD_NUMBER_TO_DELETE}"
                         }
