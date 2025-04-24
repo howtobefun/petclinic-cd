@@ -89,6 +89,15 @@ pipeline {
                         kubectl rollout status deployment/discovery-server -n ${env.NAMESPACE} --timeout=120s
                     """
 
+                    // Deploy zipkin-server 
+                    deployScript += """
+                        echo "Deploying zipkin-server"
+                        kubectl apply -f k8s/zipkin-server-deployment.yaml -n ${env.NAMESPACE}
+                        kubectl apply -f k8s/zipkin-server-service.yaml -n ${env.NAMESPACE}
+                        echo "Waiting for zipkin-server rollout to complete..."
+                        kubectl rollout status deployment/zipkin-server -n ${env.NAMESPACE} --timeout=120s
+                    """
+
                     // Deploy remaining services
                     ['api-gateway', 'admin-server', 'customers-service', 'vets-service', 'visits-service', 'genai-service'].each { service ->
                         def tagEnvVar = "${service.replace('-', '_').toUpperCase()}_TAG"

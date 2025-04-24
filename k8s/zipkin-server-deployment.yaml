@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
         - name: zipkin-server
-          image: howtobefun/spring-petclinic-zipkin-server:latest
+          image: openzipkin/zipkin:latest
           ports:
             - containerPort: 9411 # Default Zipkin port
