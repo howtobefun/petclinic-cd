@@ -51,7 +51,8 @@ pipeline {
         stage('Create Namespace') {
             steps {
                 script {
-                    sh "kubectl get namespace | grep -q \"^${env.NAMESPACE}\" || kubectl create namespace ${env.NAMESPACE}"                }
+                    sh "kubectl get namespace | grep -q \"^${env.NAMESPACE}\" || kubectl create namespace ${env.NAMESPACE}"
+                }
             }
         }
         stage('Delete all pods') {
@@ -64,7 +65,6 @@ pipeline {
         stage('Deploy to Minikube') {
             steps {
                 script {
-                    
                     def deployScript = ""
 
                     // Deploy config-server
@@ -73,6 +73,7 @@ pipeline {
                         echo "Deploying config-server with image tag ${env.CONFIG_SERVER_TAG}"
                         kubectl apply -f k8s/config-server-deployment.yaml -n ${env.NAMESPACE}
                         kubectl set image deployment/config-server config-server=${configImage} -n ${env.NAMESPACE}
+                        kubectl set env deployment/config-server EUREKA_INSTANCE_HOSTNAME=config-server.${env.NAMESPACE}.svc.cluster.local -n ${env.NAMESPACE}
                         kubectl apply -f k8s/config-server-service.yaml -n ${env.NAMESPACE}
                         echo "Waiting for config-server rollout to complete..."
                         kubectl rollout status deployment/config-server -n ${env.NAMESPACE} --timeout=120s
@@ -84,6 +85,7 @@ pipeline {
                         echo "Deploying discovery-server with image tag ${env.DISCOVERY_SERVER_TAG}"
                         kubectl apply -f k8s/discovery-server-deployment.yaml -n ${env.NAMESPACE}
                         kubectl set image deployment/discovery-server discovery-server=${discoveryImage} -n ${env.NAMESPACE}
+                        kubectl set env deployment/discovery-server EUREKA_INSTANCE_HOSTNAME=discovery-server.${env.NAMESPACE}.svc.cluster.local -n ${env.NAMESPACE}
                         kubectl apply -f k8s/discovery-server-service.yaml -n ${env.NAMESPACE}
                         echo "Waiting for discovery-server rollout to complete..."
                         kubectl rollout status deployment/discovery-server -n ${env.NAMESPACE} --timeout=120s
@@ -93,6 +95,7 @@ pipeline {
                     deployScript += """
                         echo "Deploying zipkin-server"
                         kubectl apply -f k8s/zipkin-server-deployment.yaml -n ${env.NAMESPACE}
+                        kubectl set env deployment/zipkin-server EUREKA_INSTANCE_HOSTNAME=zipkin-server.${env.NAMESPACE}.svc.cluster.local -n ${env.NAMESPACE}
                         kubectl apply -f k8s/zipkin-server-service.yaml -n ${env.NAMESPACE}
                         echo "Waiting for zipkin-server rollout to complete..."
                         kubectl rollout status deployment/zipkin-server -n ${env.NAMESPACE} --timeout=120s
@@ -106,6 +109,7 @@ pipeline {
                             echo "Deploying ${service} with image tag ${env[tagEnvVar]}"
                             kubectl apply -f k8s/${service}-deployment.yaml -n ${env.NAMESPACE}
                             kubectl set image deployment/${service} ${service}=${imageName} -n ${env.NAMESPACE}
+                            kubectl set env deployment/${service} EUREKA_INSTANCE_HOSTNAME=${service}.${env.NAMESPACE}.svc.cluster.local -n ${env.NAMESPACE}
                             kubectl apply -f k8s/${service}-service.yaml -n ${env.NAMESPACE}
                             kubectl rollout status deployment/${service} -n ${env.NAMESPACE} --timeout=120s
                         """
