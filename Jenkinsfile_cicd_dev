@@ -1,0 +1,94 @@
+// vim: syntax=groovy
+pipeline {
+    agent { label 'docker-agent-2' }
+    environment {
+        NAMESPACE = "dev"
+        CONFIG_BRANCH = "dev"
+        DOCKER_REGISTRY = 'howtobefun'
+        K8S_DIR = "k8s"
+        SOURCE_BRANCH = 'main'
+        APP_VERSION = ''
+    }
+    stages {
+        stage('Checkout Source Branch') {
+            steps {
+                cleanWs()
+                // Explicitly checkout the SOURCE_BRANCH to avoid detached HEAD
+                checkout([$class: 'GitSCM',
+                          branches: [[name: "*/${SOURCE_BRANCH}"]],
+                          userRemoteConfigs: [[url: 'https://github.com/howtobefun/petclinic-cd.git',
+                                              credentialsId: 'dfceac7b-78e3-463e-afef-006b2b0b334d']]])
+                script {
+                    // Verify the branch is checked out
+                    sh "git branch --show-current"
+                    // Get the commit hash with error handling
+                    def result = sh(script: 'git rev-parse --short HEAD', returnStdout: true, returnStatus: true)
+                    if (result != 0) {
+                        error "Failed to get commit hash. Exit code: ${result}"
+                    }
+                    env.APP_VERSION = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    if (!env.APP_VERSION) {
+                        error "Could not determine application version."
+                    }
+                    echo "Version: ${APP_VERSION}"
+                }
+            }
+        }
+        stage('Checkout Config Branch') {
+            steps {
+                cleanWs()
+                script {
+                    sh "git fetch --no-tags origin ${CONFIG_BRANCH}:refs/remotes/origin/${CONFIG_BRANCH}"
+                    sh "git checkout ${CONFIG_BRANCH}"
+                    sh "git reset --hard origin/${CONFIG_BRANCH}"
+                    sh "git clean -fdx"
+                }
+            }
+        }
+        stage('Update K8s Manifests') {
+            steps {
+                script {
+                    def services = [
+                        'config-server', 'customers-service', 'discovery-server',
+                        'visits-service', 'vets-service', 'genai-service',
+                        'api-gateway', 'admin-server'
+                    ]
+                    services.each { serviceName ->
+                        def deploymentFile = "${K8S_DIR}/${serviceName}-deployment.yaml"
+                        if (!fileExists(deploymentFile)) {
+                            error "File not found: ${deploymentFile}"
+                        }
+                        def newImage = "${DOCKER_REGISTRY}/spring-petclinic-${serviceName}:${APP_VERSION}"
+                        sh "yq eval '.spec.template.spec.containers[] | select(.name == \"${serviceName}\") | .image = \"${newImage}\"' -i ${deploymentFile}"
+                    }
+                }
+            }
+        }
+        stage('Commit and Push Changes') {
+            steps {
+                script {
+                    sh """
+                        git add ${K8S_DIR}/
+                        if git diff --staged --quiet; then
+                            echo "No changes to commit."
+                        else
+                            git commit -m "Update ${NAMESPACE} images to ${APP_VERSION}"
+                            git push origin ${CONFIG_BRANCH}
+                        fi
+                    """
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "Updated manifests for ${NAMESPACE} with version ${APP_VERSION}"
+        }
+        failure {
+            echo "Failed to update manifests for ${NAMESPACE}"
+        }
+    }
+}
