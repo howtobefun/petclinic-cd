@@ -25,12 +25,12 @@ pipeline {
                     sh "git branch --show-current || echo 'No branch (detached HEAD)'"
                     echo "HEAD commit:"
                     sh "git rev-parse HEAD || echo 'Failed to get HEAD commit'"
-                    echo "GIT_COMMIT: ${GIT_COMMIT}"
+                    echo "GIT_COMMIT: ${env.GIT_COMMIT}"
 
-                    if (!GIT_COMMIT) {
+                    if (!env.GIT_COMMIT) {
                         error "GIT_COMMIT environment variable not available."
                     }
-                    env.APP_VERSION = GIT_COMMIT.take(7)
+                    env.APP_VERSION = env.GIT_COMMIT.take(7)
                     echo "Version from GIT_COMMIT: ${env.APP_VERSION}"
                 }
             }
