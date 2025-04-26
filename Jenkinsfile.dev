@@ -11,6 +11,7 @@ pipeline {
         DOCKER_REGISTRY    = 'howtobefun'
         K8S_DIR            = "k8s"
         SOURCE_BRANCH      = 'main'
+        GIT_REPO_URL       = 'https://github.com/howtobefun/petclinic-cd.git'
         APP_VERSION        = ''                         // Will be determined (e.g., commit hash from SOURCE_BRANCH)
     }
 
