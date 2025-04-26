@@ -1,0 +1,127 @@
+// vim: syntax=groovy
+
+pipeline {
+    agent { label 'docker-agent-2' }
+    environment {
+        // --- Environment Specific ---
+        NAMESPACE          = "dev"                      // Target environment / branch name
+        CONFIG_BRANCH      = "dev"                      // Git branch holding K8s manifests for this env
+
+        // --- Application & Repo Info ---
+        DOCKER_REGISTRY    = 'howtobefun'
+        K8S_DIR            = "k8s"
+        SOURCE_BRANCH      = 'main'
+        APP_VERSION        = ''                         // Will be determined (e.g., commit hash from SOURCE_BRANCH)
+    }
+
+    stages {
+        stage('Checkout Source Branch & Get Version') {
+            steps {
+                script {
+                    echo "Checking out source branch '${SOURCE_BRANCH}' to determine app version..."
+                    deleteDir() // Clean workspace
+                    // Checkout source code - Assumes GIT_REPO_URL is authenticated via GitHub App or credentials
+                    git branch: "${SOURCE_BRANCH}", url: "${GIT_REPO_URL}"
+
+                    // Use short commit hash from source branch as the version tag for Dev
+                    env.APP_VERSION = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+
+                    if (!env.APP_VERSION) {
+                        error "Could not determine application version (APP_VERSION)."
+                    }
+                    echo "Application version to set in K8s manifests: ${APP_VERSION}"
+                }
+            }
+        }
+
+        stage('Checkout Config Branch') {
+            steps {
+                script {
+                    echo "Checking out K8s manifest branch '${CONFIG_BRANCH}'..."
+                    deleteDir() // Clean workspace
+                    // Checkout the specific config branch - Assumes GIT_REPO_URL is authenticated
+                    git branch: "${CONFIG_BRANCH}", url: "${GIT_REPO_URL}"
+
+                    // Ensure the branch is up-to-date and clean
+                    sh """
+                        git reset --hard origin/"${CONFIG_BRANCH}"
+                        git clean -fdx
+                        echo "Checked out and reset branch '${CONFIG_BRANCH}'"
+                    """
+                }
+            }
+        }
+
+        stage('Update K8s Manifests') {
+            steps {
+                script {
+                    echo "Updating K8s deployment images on branch '${CONFIG_BRANCH}' with version '${APP_VERSION}'..."
+                    // List of services whose deployment YAML needs image update
+                    def services = [
+                        'config-server', 'customers-service', 'discovery-server',
+                        'visits-service', 'vets-service', 'genai-service',
+                        'api-gateway', 'admin-server'
+                    ]
+
+                    services.each { serviceName ->
+                        def deploymentFile = "${K8S_DIR}/${serviceName}-deployment.yaml"
+                        echo "Processing ${deploymentFile}..."
+
+                        if (!fileExists(deploymentFile)) {
+                            error "Deployment file not found at path: ${deploymentFile}. Aborting."
+                        } else {
+                            // Construct the full new image tag
+                            def newImage = "${DOCKER_REGISTRY}/spring-petclinic-${serviceName}:${APP_VERSION}"
+                            def containerName = serviceName
+
+                            echo "Setting image for container '${containerName}' to '${newImage}' in ${deploymentFile}"
+
+                            // Use yq to modify the image field for the specific container by name
+                            sh """
+                                yq eval '.spec.template.spec.containers[] | select(.name == "${containerName}") | .image = "${newImage}"' -i "${deploymentFile}"
+                            """
+                        }
+                    }
+                    echo "Finished updating K8s manifests."
+                }
+            }
+        }
+
+        stage('Commit and Push Config Changes') {
+            steps {
+                script {
+                    echo "Committing and pushing K8s manifest changes to branch '${CONFIG_BRANCH}'..."
+                    // Assumes GitHub App or Jenkins credentials handle push authentication
+                    sh """
+                        git config user.email "jenkins-ci@example.com"
+                        git config user.name "Jenkins CI"
+
+                        git add "${K8S_DIR}/"
+
+                        if git diff --staged --quiet; then
+                            echo "No changes detected in K8s manifests to commit."
+                        else
+                            git commit -m "chore(k8s): update ${NAMESPACE} app image versions to ${APP_VERSION} [skip ci]"
+                            echo "Changes committed. Pushing config changes to origin/${CONFIG_BRANCH}..."
+                            git push origin "${CONFIG_BRANCH}"
+                            echo "Push successful."
+                        fi
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Dev K8s manifest update pipeline finished."
+            deleteDir() // Clean workspace
+        }
+        success {
+            echo "Successfully updated and pushed K8s manifests for ${NAMESPACE} with version ${APP_VERSION}."
+        }
+        failure {
+            echo "Failed to update/push K8s manifests for ${NAMESPACE}."
+        }
+    }
+}
