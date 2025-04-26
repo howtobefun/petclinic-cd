@@ -73,15 +73,29 @@ pipeline {
         stage('Commit and Push Changes') {
             steps {
                 script {
-                    sh """
-                        git add ${K8S_DIR}/
-                        if git diff --staged --quiet; then
-                            echo "No changes to commit."
-                        else
-                            git commit -m "Update ${NAMESPACE} images to ${env.APP_VERSION}"
-                            git push origin ${CONFIG_BRANCH}
-                        fi
-                    """
+                    sshagent(['git-ssh-credentials']) {
+                        sh """
+                            git config user.name "Jenkins Automated Commit"
+                            git config user.email "jenkins@your-jenkins-domain.com" 
+
+                            git remote set-url origin git@github.com:howtobefun/petclinic-cd.git
+
+                            git add ${env.K8S_DIR}/
+
+                            # Check if there are changes to commit
+                            if git diff --staged --quiet; then
+                                echo "No changes to commit."
+                            else
+                                echo "Changes detected, committing and pushing via SSH..."
+                                git commit -m "Update ${env.NAMESPACE} images to ${env.APP_VERSION}"
+
+                                git push origin ${env.CONFIG_BRANCH}
+                            fi
+
+                            # Optional: Change the remote URL back to HTTPS if you need it for later stages
+                            # git remote set-url origin ${env.REPO_URL}
+                        """
+                    }
                 }
             }
         }
