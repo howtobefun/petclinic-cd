@@ -25,12 +25,11 @@ pipeline {
                     echo "HEAD commit:"
                     sh "git rev-parse HEAD || echo 'Failed to get HEAD commit'"
 
-                    // Use GIT_COMMIT provided by Jenkins SCM
                     if (!env.GIT_COMMIT) {
                         error "GIT_COMMIT environment variable not available."
                     }
-                    env.APP_VERSION = env.GIT_COMMIT.take(7) // Shorten to 7 characters (e.g., 803afcd)
-                    echo "Version from GIT_COMMIT: ${APP_VERSION}"
+                    env.APP_VERSION = env.GIT_COMMIT.take(7)
+                    echo "Version from GIT_COMMIT: ${env.APP_VERSION}"
                 }
             }
         }
@@ -58,7 +57,7 @@ pipeline {
                         if (!fileExists(deploymentFile)) {
                             error "File not found: ${deploymentFile}"
                         }
-                        def newImage = "${DOCKER_REGISTRY}/spring-petclinic-${serviceName}:${APP_VERSION}"
+                        def newImage = "${DOCKER_REGISTRY}/spring-petclinic-${serviceName}:${env.APP_VERSION}"
                         sh "yq eval '.spec.template.spec.containers[] | select(.name == \"${serviceName}\") | .image = \"${newImage}\"' -i ${deploymentFile}"
                     }
                 }
@@ -72,7 +71,7 @@ pipeline {
                         if git diff --staged --quiet; then
                             echo "No changes to commit."
                         else
-                            git commit -m "Update ${NAMESPACE} images to ${APP_VERSION}"
+                            git commit -m "Update ${NAMESPACE} images to ${env.APP_VERSION}"
                             git push origin ${CONFIG_BRANCH}
                         fi
                     """
@@ -85,7 +84,7 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "Updated manifests for ${NAMESPACE} with version ${APP_VERSION}"
+            echo "Updated manifests for ${NAMESPACE} with version ${env.APP_VERSION}"
         }
         failure {
             echo "Failed to update manifests for ${NAMESPACE}"
