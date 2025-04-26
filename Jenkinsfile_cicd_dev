@@ -14,7 +14,6 @@ pipeline {
     stages {
         stage('Checkout Source Branch') {
             steps {
-                cleanWs()
                 checkout([$class: 'GitSCM',
                           branches: [[name: "refs/heads/${SOURCE_BRANCH}"]],
                           userRemoteConfigs: [[url: REPO_URL, credentialsId: CREDENTIALS_ID]],
@@ -25,19 +24,18 @@ pipeline {
                     sh "git branch --show-current || echo 'No branch (detached HEAD)'"
                     echo "HEAD commit:"
                     sh "git rev-parse HEAD || echo 'Failed to get HEAD commit'"
-                    echo "GIT_COMMIT: ${GIT_COMMIT}"
+                    echo "GIT_COMMIT: ${env.GIT_COMMIT}"
 
-                    if (!GIT_COMMIT) {
+                    if (!env.GIT_COMMIT) {
                         error "GIT_COMMIT environment variable not available."
                     }
-                    env.APP_VERSION = GIT_COMMIT.take(7)
+                    env.APP_VERSION = env.GIT_COMMIT.take(7)
                     echo "Version from GIT_COMMIT: ${env.APP_VERSION}"
                 }
             }
         }
         stage('Checkout Config Branch') {
             steps {
-                cleanWs()
                 checkout([$class: 'GitSCM',
                           branches: [[name: "refs/heads/${CONFIG_BRANCH}"]],
                           userRemoteConfigs: [[url: REPO_URL, credentialsId: CREDENTIALS_ID]],
@@ -73,15 +71,37 @@ pipeline {
         stage('Commit and Push Changes') {
             steps {
                 script {
-                    sh """
-                        git add ${K8S_DIR}/
-                        if git diff --staged --quiet; then
-                            echo "No changes to commit."
-                        else
-                            git commit -m "Update ${NAMESPACE} images to ${env.APP_VERSION}"
-                            git push origin ${CONFIG_BRANCH}
-                        fi
-                    """
+                    sshagent(['git-ssh-credentials']) {
+                        sh """
+                            git config user.name "Jenkins Automated Commit"
+                            git config user.email "jenkins@your-jenkins-domain.com" 
+
+                            git remote set-url origin git@github.com:howtobefun/petclinic-cd.git
+
+                            git add ${env.K8S_DIR}/
+
+                            # Check if there are changes to commit
+                            if git diff --staged --quiet; then
+                                echo "No changes to commit."
+                            else
+                                echo "Changes detected, committing and pushing via SSH..."
+                                git commit -m "Update ${env.NAMESPACE} images to ${env.APP_VERSION}"
+
+                                echo "Remote URLs:"
+
+                                git remote -v
+                                echo "Current branch:"
+                                git branch --show-current
+                                echo "SSH agent status:"
+                                ssh-add -l
+
+                                git push origin ${env.CONFIG_BRANCH}
+                            fi
+
+                            # Optional: Change the remote URL back to HTTPS if you need it for later stages
+                            # git remote set-url origin ${env.REPO_URL}
+                        """
+                    }
                 }
             }
         }
