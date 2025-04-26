@@ -13,8 +13,19 @@ pipeline {
         stage('Checkout Source Branch') {
             steps {
                 cleanWs()
-                checkout scm
+                // Explicitly checkout the SOURCE_BRANCH to avoid detached HEAD
+                checkout([$class: 'GitSCM',
+                          branches: [[name: "*/${SOURCE_BRANCH}"]],
+                          userRemoteConfigs: [[url: 'https://github.com/howtobefun/petclinic-cd.git',
+                                              credentialsId: 'dfceac7b-78e3-463e-afef-006b2b0b334d']]])
                 script {
+                    // Verify the branch is checked out
+                    sh "git branch --show-current"
+                    // Get the commit hash with error handling
+                    def result = sh(script: 'git rev-parse --short HEAD', returnStdout: true, returnStatus: true)
+                    if (result != 0) {
+                        error "Failed to get commit hash. Exit code: ${result}"
+                    }
                     env.APP_VERSION = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     if (!env.APP_VERSION) {
                         error "Could not determine application version."
