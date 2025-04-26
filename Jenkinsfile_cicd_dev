@@ -86,7 +86,7 @@ pipeline {
                                 echo "Changes detected, committing and pushing via HTTPS..."
                                 git commit -m "Update ${env.NAMESPACE} images to ${env.APP_VERSION}"
                                 
-                                git push ${env.REPO_URL} ${env.CONFIG_BRANCH}
+                                git push origin ${env.CONFIG_BRANCH}
                             fi
                         """
                     }
