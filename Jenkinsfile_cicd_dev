@@ -8,6 +8,8 @@ pipeline {
         K8S_DIR = "k8s"
         SOURCE_BRANCH = 'main'
         APP_VERSION = ''
+        REPO_URL = 'https://github.com/howtobefun/petclinic-cd.git'
+        CREDENTIALS_ID = 'dfceac7b-78e3-463e-afef-006b2b0b334d'
     }
     stages {
         stage('Checkout Source Branch') {
@@ -15,8 +17,7 @@ pipeline {
                 cleanWs()
                 checkout([$class: 'GitSCM',
                           branches: [[name: "refs/heads/${SOURCE_BRANCH}"]],
-                          userRemoteConfigs: [[url: 'https://github.com/howtobefun/petclinic-cd.git',
-                                              credentialsId: 'dfceac7b-78e3-463e-afef-006b2b0b334d']],
+                          userRemoteConfigs: [[url: REPO_URL, credentialsId: CREDENTIALS_ID]],
                           extensions: [[$class: 'CloneOption', honorRefspec: true, noTags: true, shallow: false],
                                        [$class: 'CheckoutOption', timeout: 10]]])
                 script {
@@ -24,11 +25,12 @@ pipeline {
                     sh "git branch --show-current || echo 'No branch (detached HEAD)'"
                     echo "HEAD commit:"
                     sh "git rev-parse HEAD || echo 'Failed to get HEAD commit'"
+                    echo "GIT_COMMIT: ${GIT_COMMIT}"
 
-                    if (!env.GIT_COMMIT) {
+                    if (!GIT_COMMIT) {
                         error "GIT_COMMIT environment variable not available."
                     }
-                    env.APP_VERSION = env.GIT_COMMIT.take(7)
+                    env.APP_VERSION = GIT_COMMIT.take(7)
                     echo "Version from GIT_COMMIT: ${env.APP_VERSION}"
                 }
             }
@@ -36,6 +38,11 @@ pipeline {
         stage('Checkout Config Branch') {
             steps {
                 cleanWs()
+                checkout([$class: 'GitSCM',
+                          branches: [[name: "refs/heads/${CONFIG_BRANCH}"]],
+                          userRemoteConfigs: [[url: REPO_URL, credentialsId: CREDENTIALS_ID]],
+                          extensions: [[$class: 'CloneOption', honorRefspec: true, noTags: true, shallow: false],
+                                       [$class: 'CheckoutOption', timeout: 10]]])
                 script {
                     sh "git fetch --no-tags origin ${CONFIG_BRANCH}:refs/remotes/origin/${CONFIG_BRANCH}"
                     sh "git checkout ${CONFIG_BRANCH}"
