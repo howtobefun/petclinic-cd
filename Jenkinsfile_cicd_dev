@@ -14,7 +14,6 @@ pipeline {
     stages {
         stage('Checkout Source Branch') {
             steps {
-                cleanWs()
                 checkout([$class: 'GitSCM',
                           branches: [[name: "refs/heads/${SOURCE_BRANCH}"]],
                           userRemoteConfigs: [[url: REPO_URL, credentialsId: CREDENTIALS_ID]],
@@ -37,7 +36,6 @@ pipeline {
         }
         stage('Checkout Config Branch') {
             steps {
-                cleanWs()
                 checkout([$class: 'GitSCM',
                           branches: [[name: "refs/heads/${CONFIG_BRANCH}"]],
                           userRemoteConfigs: [[url: REPO_URL, credentialsId: CREDENTIALS_ID]],
@@ -88,6 +86,14 @@ pipeline {
                             else
                                 echo "Changes detected, committing and pushing via SSH..."
                                 git commit -m "Update ${env.NAMESPACE} images to ${env.APP_VERSION}"
+
+                                echo "Remote URLs:"
+
+                                git remote -v
+                                echo "Current branch:"
+                                git branch --show-current
+                                echo "SSH agent status:"
+                                ssh-add -l
 
                                 git push origin ${env.CONFIG_BRANCH}
                             fi
