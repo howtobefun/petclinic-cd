@@ -1,6 +1,6 @@
 // vim: syntax=groovy
 pipeline {
-    agent any
+    agent docker-agent-2 
     parameters {
         string(name: 'customers_service_branch', defaultValue: 'main', description: 'Branch for customers-service')
         string(name: 'vets_service_branch', defaultValue: 'main', description: 'Branch for vets-service')
